@@ -221,14 +221,17 @@ public class Server {
         }
 
         private void handleBroadcast(String[] parts) {
-            if (parts.length == 2) {
+            if (parts.length >= 2) {
 
                 if (handle == null) {
                     out.println("Error: You must register before using this command.");
                     return;
                 }
 
-                String message = parts[1];
+                String message = "";
+                for (int i = 1; i < parts.length; i++){
+                    message += parts[i] + " ";
+                }
                 for (ClientHandler client : clients.values()) {
                     client.out.println("Broadcast from " + handle + ": " + message);
                 }
@@ -238,9 +241,13 @@ public class Server {
         }
 
         private void handleUnicast(String[] parts) {
-            if (parts.length == 3) {
+            if (parts.length >= 3) {
                 String targetHandle = parts[1];
-                String message = parts[2];
+                String message = "";
+                for (int i = 2; i < parts.length; i++){
+                    message += parts[i] + " ";
+                }
+
                 ClientHandler targetClient = clients.get(targetHandle);
 
                 if (handle == null) {
@@ -249,7 +256,7 @@ public class Server {
                 }
 
                 if (targetClient != null) {
-                    out.print("Message sent.\n>>>")
+                    out.print("Message sent.\n>>>");
                     targetClient.out.println("Message from " + handle + ": " + message);
                 } else {
                     out.println("Error: Target handle not found.");
