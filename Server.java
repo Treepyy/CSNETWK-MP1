@@ -86,6 +86,12 @@ public class Server {
                 case "/get":
                     handleGet(parts);
                     break;
+                case "/broadcast":
+                    handleBroadcast(parts);
+                    break;
+                case "/unicast":
+                    handleUnicast(parts);
+                    break;
                 case "/?":
                     handleHelp();
                     break;
@@ -120,6 +126,8 @@ public class Server {
                 } else {
                     clients.put(handle, this);
                     out.println("Welcome " + handle + "!");
+                    File folder = new File(handle + "_files");
+                    folder.mkdirs();
                 }
             } else {
                 out.println("Error: Command parameters do not match or is not allowed.");
@@ -129,7 +137,7 @@ public class Server {
         private void handleStore(String[] parts) {
             if (parts.length == 2) {
                 String filename = parts[1];
-                File sourceFile = new File("client_files/" + filename);
+                File sourceFile = new File(handle + "_files/" + filename);
                 File destinationFile = new File(fileStoragePath + "/" + filename);
 
                 if (handle == null) {
@@ -179,7 +187,7 @@ public class Server {
             if (parts.length == 2) {
                 String filename = parts[1];
                 File sourceFile = new File(fileStoragePath + "/" + filename);
-                File destinationFile = new File("client_files/" + filename);
+                File destinationFile = new File(handle + "_files/" + filename);
 
                 if (handle == null) {
                     out.println("Error: You must register before using this command.");
@@ -209,6 +217,45 @@ public class Server {
             try (FileChannel sourceChannel = new FileInputStream(sourceFile).getChannel();
                  FileChannel destChannel = new FileOutputStream(destinationFile).getChannel()) {
                 destChannel.transferFrom(sourceChannel, 0, sourceChannel.size());
+            }
+        }
+
+        private void handleBroadcast(String[] parts) {
+            if (parts.length == 2) {
+
+                if (handle == null) {
+                    out.println("Error: You must register before using this command.");
+                    return;
+                }
+
+                String message = parts[1];
+                for (ClientHandler client : clients.values()) {
+                    client.out.println("Broadcast from " + handle + ": " + message);
+                }
+            } else {
+                out.println("Error: Command parameters do not match or is not allowed.");
+            }
+        }
+
+        private void handleUnicast(String[] parts) {
+            if (parts.length == 3) {
+                String targetHandle = parts[1];
+                String message = parts[2];
+                ClientHandler targetClient = clients.get(targetHandle);
+
+                if (handle == null) {
+                    out.println("Error: You must register before using this command.");
+                    return;
+                }
+
+                if (targetClient != null) {
+                    out.print("Message sent.\n>>>")
+                    targetClient.out.println("Message from " + handle + ": " + message);
+                } else {
+                    out.println("Error: Target handle not found.");
+                }
+            } else {
+                out.println("Error: Command parameters do not match or is not allowed.");
             }
         }
 
