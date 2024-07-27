@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.nio.channels.FileChannel;
 
 public class Server {
     private ServerSocket serverSocket;
@@ -45,9 +46,17 @@ public class Server {
                     processCommand(message);
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                // Handle client disconnection
+                if (handle != null) {
+                    System.out.println(handle + " has disconnected from the server.");
+                } else {
+                    System.out.println("A client has disconnected from the server.");
+                }
             } finally {
                 try {
+                    if (handle != null) {
+                        clients.remove(handle);
+                    }
                     clientSocket.close();
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -120,17 +129,28 @@ public class Server {
         private void handleStore(String[] parts) {
             if (parts.length == 2) {
                 String filename = parts[1];
+                File sourceFile = new File("client_files/" + filename);
+                File destinationFile = new File(fileStoragePath + "/" + filename);
+
+                if (handle == null) {
+                    out.println("Error: You must register before using this command.");
+                    return;
+                }
+
+                if (!sourceFile.exists()) {
+                    out.println("Error: Source file does not exist.");
+                    return;
+                }
+
                 try {
-                    File file = new File(fileStoragePath + "/" + filename);
-                    if (file.exists()) {
-                        out.println("Error: File already exists.");
+                    if (destinationFile.exists()) {
+                        out.println("Error: File already exists on the server.");
                     } else {
-                        PrintWriter fileWriter = new PrintWriter(new FileWriter(file));
-                        fileWriter.close();
+                        copyFile(sourceFile, destinationFile);
                         out.println(handle + "<" + new Date() + ">: Uploaded " + filename);
                     }
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    out.println("Error: Unable to copy file. " + e.getMessage());
                 }
             } else {
                 out.println("Error: Command parameters do not match or is not allowed.");
@@ -140,6 +160,11 @@ public class Server {
         private void handleDir() {
             File folder = new File(fileStoragePath);
             File[] listOfFiles = folder.listFiles();
+            if (handle == null) {
+                out.println("Error: You must register before using this command.");
+                return;
+            }
+
             if (listOfFiles != null && listOfFiles.length > 0) {
                 out.println("Server Directory");
                 for (File file : listOfFiles) {
@@ -153,14 +178,37 @@ public class Server {
         private void handleGet(String[] parts) {
             if (parts.length == 2) {
                 String filename = parts[1];
-                File file = new File(fileStoragePath + "/" + filename);
-                if (file.exists()) {
-                    out.println("File received from Server: " + filename);
+                File sourceFile = new File(fileStoragePath + "/" + filename);
+                File destinationFile = new File("client_files/" + filename);
+
+                if (handle == null) {
+                    out.println("Error: You must register before using this command.");
+                    return;
+                }
+
+                if (sourceFile.exists()) {
+                    try {
+                        copyFile(sourceFile, destinationFile);
+                        out.println("File received from Server: " + filename);
+                    } catch (IOException e) {
+                        out.println("Error: Unable to recieve file. " + e.getMessage());
+                    }
                 } else {
                     out.println("Error: File not found in the server.");
                 }
             } else {
                 out.println("Error: Command parameters do not match or is not allowed.");
+            }
+        }
+
+        private void copyFile(File sourceFile, File destinationFile) throws IOException {
+            if (!destinationFile.getParentFile().exists()) {
+                destinationFile.getParentFile().mkdirs();
+            }
+
+            try (FileChannel sourceChannel = new FileInputStream(sourceFile).getChannel();
+                 FileChannel destChannel = new FileOutputStream(destinationFile).getChannel()) {
+                destChannel.transferFrom(sourceChannel, 0, sourceChannel.size());
             }
         }
 
@@ -171,6 +219,8 @@ public class Server {
             out.println("/store <filename>");
             out.println("/dir");
             out.println("/get <filename>");
+            out.println("/broadcast <message>");
+            out.println("/unicast <handle> <message>");
             out.println("/?");
         }
     }
