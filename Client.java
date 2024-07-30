@@ -1,37 +1,94 @@
-import java.io.*;
-import java.net.*;
+import java.awt.BorderLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.Socket;
 
-public class Client {
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+
+public class Client extends JFrame {
+    private JTextArea textArea;
+    private JTextField textField;
+    private JButton sendButton;
+    private JButton disconnectButton;
     private Socket clientSocket;
     private BufferedReader in;
     private PrintWriter out;
-    private BufferedReader consoleReader;
     private boolean connected = false;
 
-    public void connectToServer(String ip, int port) {
-        while (!connected) {
-            try {
-                clientSocket = new Socket(ip, port);
-                in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                out = new PrintWriter(clientSocket.getOutputStream(), true);
-                consoleReader = new BufferedReader(new InputStreamReader(System.in));
-                System.out.println("Connected to the server at " + ip + ":" + port);
-                System.out.print("> ");
-                connected = true;
+    public Client() {
+        setTitle("Client");
+        setSize(400, 300);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
 
-                new Thread(new ServerListener()).start();
+        textArea = new JTextArea();
+        textArea.setEditable(false);
+        add(new JScrollPane(textArea), BorderLayout.CENTER);
 
-                String userInput;
-                while ((userInput = consoleReader.readLine()) != null) {
-                    out.println(userInput);
-                }
-            } catch (IOException e) {
-                System.err.println("Failed to connect to server, retrying in 10 seconds...");
+        JPanel panel = new JPanel();
+        panel.setLayout(new BorderLayout());
+
+        textField = new JTextField();
+        panel.add(textField, BorderLayout.CENTER);
+
+        sendButton = new JButton("Send");
+        sendButton.addActionListener(new SendButtonListener());
+        panel.add(sendButton, BorderLayout.EAST);
+
+        disconnectButton = new JButton("Disconnect");
+        disconnectButton.addActionListener(new DisconnectButtonListener());
+        panel.add(disconnectButton, BorderLayout.SOUTH);
+
+        add(panel, BorderLayout.SOUTH);
+    }
+
+    private void connectToServer(String ip, int port) {
+        new Thread(() -> {
+            while (!connected) {
                 try {
-                    Thread.sleep(10000); // Wait for 5 seconds before retrying
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
+                    clientSocket = new Socket(ip, port);
+                    in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                    out = new PrintWriter(clientSocket.getOutputStream(), true);
+                    connected = true;
+                    textArea.append("Connected to the server at " + ip + ":" + port + "\n");
+
+                    new Thread(new ServerListener()).start();
+                } catch (IOException e) {
+                    textArea.append("Failed to connect to server, retrying in 10 seconds...\n");
+                    try {   
+                        Thread.sleep(10000); // Wait for 10 seconds before retrying
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
                 }
+            }
+        }).start();
+    }
+
+    private class SendButtonListener implements ActionListener {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            sendMessage();
+        }
+    }
+
+    private class DisconnectButtonListener implements ActionListener {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            try {
+                disconnect();
+            } catch (IOException ioException) {
+                textArea.append("Error disconnecting from server.\n");
             }
         }
     }
@@ -42,26 +99,43 @@ public class Client {
             try {
                 String serverResponse;
                 while ((serverResponse = in.readLine()) != null) {
-                    System.out.println("> " + serverResponse);
-                    System.out.print(">>> ");  // Display the user input prompt again after server response
+                    textArea.append("> " + serverResponse + "\n");
                 }
             } catch (IOException e) {
-                System.err.println("Connection to server lost.");
+                textArea.append("Connection to server lost.\n");
                 connected = false;
                 connectToServer(clientSocket.getInetAddress().getHostAddress(), clientSocket.getPort());
             }
         }
     }
 
-    public void disconnect() throws IOException {
+    private void sendMessage() {
+        if (connected) {
+            try {
+                String message = textField.getText();
+                if (!message.isEmpty()) {
+                    out.println(message);
+                    textField.setText("");
+                }
+            } catch (Exception e) {
+                textArea.append("Error sending message.\n");
+            }
+        }
+    }
+
+    private void disconnect() throws IOException {
         if (clientSocket != null && !clientSocket.isClosed()) {
             clientSocket.close();
-            System.out.println("Disconnected from the server.");
+            connected = false;
+            textArea.append("Disconnected from the server.\n");
         }
     }
 
     public static void main(String[] args) {
-        Client client = new Client();
-        client.connectToServer("127.0.0.1", 12345);
+        SwingUtilities.invokeLater(() -> {
+            Client client = new Client();
+            client.setVisible(true);
+            client.connectToServer("127.0.0.1", 12345); // Replace with your server IP and port
+        });
     }
 }
