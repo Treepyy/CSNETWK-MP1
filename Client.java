@@ -1,9 +1,3 @@
-/**
- * To run open CMD and input javac Client.java
- * 
- * Afterwards, input         java Client.java
- */
-
 import java.awt.BorderLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -30,6 +24,8 @@ public class Client extends JFrame {
     private BufferedReader in;
     private PrintWriter out;
     private boolean connected = false;
+    private String serverIp = "127.0.0.1";
+    private int serverPort = 12345;
 
     public Client() {
         setTitle("Client");
@@ -116,18 +112,47 @@ public class Client extends JFrame {
     }
 
     private void sendMessage() {
+        String message = textField.getText();
+    
         if (connected) {
             try {
-                String message = textField.getText();
                 if (!message.isEmpty()) {
                     out.println(message);
                     textField.setText("");
                 }
             } catch (Exception e) {
                 textArea.append("Error sending message.\n");
+            }            
+        } else {
+            if (message.equals("/join 127.0.0.1 12345")) {
+                String[] parts = message.split(" ");
+                if (parts.length == 3) {
+                    String ip = parts[1];
+                    int port = Integer.parseInt(parts[2]);
+                    serverIp = ip; 
+                    serverPort = port; 
+                    connectToServer(serverIp, serverPort);
+                } else {
+                    textArea.append("Error: Connection to the Server has failed!\n" + 
+                                    "Please check IP Address and Port Number.\n");
+                }
+            } else if (message.equals("/?")) {
+                    textArea.append("/join <server_ip> <port>\n");
+                    textArea.append("/leave\n");
+                    textArea.append("/register <handle>\n");
+                    textArea.append("/store <filename>\n");
+                    textArea.append("/dir\n");
+                    textArea.append("/get <filename>\n");
+                    textArea.append("/broadcast <message>\n");
+                    textArea.append("/unicast <handle> <message>\n");
+                    textArea.append("/?\n");
+            } else {
+                textArea.append("Error: Connection to the Server has failed!\n" + 
+                                    "Please check IP Address and Port Number.\n");
             }
         }
     }
+    
 
     private void disconnect() throws IOException {
         if (clientSocket != null && !clientSocket.isClosed()) {
@@ -141,7 +166,6 @@ public class Client extends JFrame {
         SwingUtilities.invokeLater(() -> {
             Client client = new Client();
             client.setVisible(true);
-            client.connectToServer("127.0.0.1", 12345); 
         });
     }
 }

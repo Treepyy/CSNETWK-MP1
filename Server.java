@@ -54,10 +54,19 @@ public class Server {
     public void stop() {
         running = false;
         try {
-            serverSocket.close();
+            synchronized (clients) {
+                for (ClientHandler handler : clients.values()) {
+                    try {
+                        handler.getClientSocket().close(); 
+                    } catch (IOException e) {
+                        appendLog("Error closing client socket: " + e.getMessage());
+                    }
+                }
+                clients.clear(); 
+            }
             appendLog("Server stopped.");
-        } catch (IOException e) {
-            appendLog("Error closing server socket: " + e.getMessage());
+        } catch (Exception e) {
+            appendLog("Error stopping server: " + e.getMessage());
         }
     }
 
@@ -66,7 +75,7 @@ public class Server {
             logArea.append(message + "\n");
         }
     }
-
+    
     private class ClientHandler implements Runnable {
         private Socket clientSocket;
         private BufferedReader in;
@@ -77,6 +86,10 @@ public class Server {
             this.clientSocket = socket;
             in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             out = new PrintWriter(clientSocket.getOutputStream(), true);
+        }
+
+        public Socket getClientSocket() {
+            return clientSocket;
         }
 
         @Override
@@ -255,7 +268,7 @@ public class Server {
             }
 
             try (FileChannel sourceChannel = new FileInputStream(sourceFile).getChannel();
-                 FileChannel destChannel = new FileOutputStream(destinationFile).getChannel()) {
+                FileChannel destChannel = new FileOutputStream(destinationFile).getChannel()) {
                 destChannel.transferFrom(sourceChannel, 0, sourceChannel.size());
             }
         }
