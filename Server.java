@@ -1,3 +1,10 @@
+/**
+ * To run open CMD and input    javac Server.java ServerGUI.java
+ * 
+ * Afterwards, input            java  ServerGUI.java
+ */
+
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -12,26 +19,51 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.swing.JTextArea;
+
 public class Server {
     private ServerSocket serverSocket;
     private Map<String, ClientHandler> clients = new HashMap<>();
     private final String fileStoragePath = "server_files";
+    private JTextArea logArea;
+    private volatile boolean running = true;
 
-    public Server(int port) throws IOException {
+    public Server(int port, JTextArea logArea) throws IOException {
         serverSocket = new ServerSocket(port);
+        this.logArea = logArea;
         new File(fileStoragePath).mkdir();
-        System.out.println("Server started on port " + port);
+        appendLog("Server started on port " + port);
     }
 
     public void start() {
-        while (true) {
-            try {
-                Socket clientSocket = serverSocket.accept();
-                ClientHandler clientHandler = new ClientHandler(clientSocket);
-                new Thread(clientHandler).start();
-            } catch (IOException e) {
-                e.printStackTrace();
+        new Thread(() -> {
+            while (running) {
+                try {
+                    Socket clientSocket = serverSocket.accept();
+                    ClientHandler clientHandler = new ClientHandler(clientSocket);
+                    new Thread(clientHandler).start();
+                } catch (IOException e) {
+                    if (running) {
+                        appendLog("Error accepting client connection: " + e.getMessage());
+                    }
+                }
             }
+        }).start();
+    }
+
+    public void stop() {
+        running = false;
+        try {
+            serverSocket.close();
+            appendLog("Server stopped.");
+        } catch (IOException e) {
+            appendLog("Error closing server socket: " + e.getMessage());
+        }
+    }
+
+    private void appendLog(String message) {
+        if (logArea != null) {
+            logArea.append(message + "\n");
         }
     }
 
@@ -55,11 +87,10 @@ public class Server {
                     processCommand(message);
                 }
             } catch (IOException e) {
-                // Handle client disconnection
                 if (handle != null) {
-                    System.out.println(handle + " has disconnected from the server.");
+                    appendLog(handle + " has disconnected from the server.");
                 } else {
-                    System.out.println("A client has disconnected from the server.");
+                    appendLog("A client has disconnected from the server.");
                 }
             } finally {
                 try {
@@ -68,7 +99,7 @@ public class Server {
                     }
                     clientSocket.close();
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    appendLog("Error closing client socket: " + e.getMessage());
                 }
             }
         }
@@ -123,7 +154,7 @@ public class Server {
             try {
                 clientSocket.close();
             } catch (IOException e) {
-                e.printStackTrace();
+                appendLog("Error closing client socket: " + e.getMessage());
             }
         }
 
@@ -208,7 +239,7 @@ public class Server {
                         copyFile(sourceFile, destinationFile);
                         out.println("File received from Server: " + filename);
                     } catch (IOException e) {
-                        out.println("Error: Unable to recieve file. " + e.getMessage());
+                        out.println("Error: Unable to receive file. " + e.getMessage());
                     }
                 } else {
                     out.println("Error: File not found in the server.");
@@ -230,50 +261,67 @@ public class Server {
         }
 
         private void handleBroadcast(String[] parts) {
-            if (parts.length >= 2) {
-
-                if (handle == null) {
-                    out.println("Error: You must register before using this command.");
-                    return;
-                }
-
-                String message = "";
-                for (int i = 1; i < parts.length; i++){
-                    message += parts[i] + " ";
-                }
-                for (ClientHandler client : clients.values()) {
-                    client.out.println("Broadcast from " + handle + ": " + message);
-                }
-            } else {
-                out.println("Error: Command parameters do not match or is not allowed.");
+            if (handle == null) {
+                out.println("Error: You must register before using this command.");
+                return;
             }
+        
+            if (parts.length < 2) {
+                out.println("Error: Command parameters do not match or is not allowed.");
+                return;
+            }
+        
+            StringBuilder messageBuilder = new StringBuilder();
+            for (int i = 1; i < parts.length; i++) {
+                messageBuilder.append(parts[i]);
+                if (i < parts.length - 1) {
+                    messageBuilder.append(" ");
+                }
+            }
+            String message = messageBuilder.toString();
+        
+            for (ClientHandler client : clients.values()) {
+                client.out.println("Broadcast from " + handle + ": " + message);
+            }
+            appendLog("Broadcast from " + handle + ": " + message);
         }
+        
+        
 
         private void handleUnicast(String[] parts) {
-            if (parts.length >= 3) {
-                String targetHandle = parts[1];
-                String message = "";
-                for (int i = 2; i < parts.length; i++){
-                    message += parts[i] + " ";
-                }
-
-                ClientHandler targetClient = clients.get(targetHandle);
-
-                if (handle == null) {
-                    out.println("Error: You must register before using this command.");
-                    return;
-                }
-
-                if (targetClient != null) {
-                    out.print("Message sent.\n>>>");
-                    targetClient.out.println("Message from " + handle + ": " + message);
-                } else {
-                    out.println("Error: Target handle not found.");
-                }
-            } else {
+            if (handle == null) {
+                out.println("Error: You must register before using this command.");
+                return;
+            }
+        
+            if (parts.length < 3) {
                 out.println("Error: Command parameters do not match or is not allowed.");
+                return;
+            }
+        
+            String targetHandle = parts[1];
+        
+            StringBuilder messageBuilder = new StringBuilder();
+            for (int i = 2; i < parts.length; i++) {
+                messageBuilder.append(parts[i]);
+                if (i < parts.length - 1) {
+                    messageBuilder.append(" ");
+                }
+            }
+            String message = messageBuilder.toString();
+        
+        
+            ClientHandler targetClient = clients.get(targetHandle);
+        
+            if (targetClient != null) {
+                targetClient.out.println("Message from " + handle + ": " + message);
+                out.println("Message sent.");
+                appendLog("Message sent to " + targetHandle + ": " + message);
+            } else {
+                out.println("Error: Target handle not found.");
             }
         }
+        
 
         private void handleHelp() {
             out.println("/join <server_ip> <port>");
@@ -285,15 +333,6 @@ public class Server {
             out.println("/broadcast <message>");
             out.println("/unicast <handle> <message>");
             out.println("/?");
-        }
-    }
-
-    public static void main(String[] args) {
-        try {
-            Server server = new Server(12345);
-            server.start();
-        } catch (IOException e) {
-            e.printStackTrace();
         }
     }
 }

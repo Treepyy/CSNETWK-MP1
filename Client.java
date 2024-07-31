@@ -1,3 +1,9 @@
+/**
+ * To run open CMD and input javac Client.java
+ * 
+ * Afterwards, input         java Client.java
+ */
+
 import java.awt.BorderLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -135,7 +141,7 @@ public class Client extends JFrame {
         SwingUtilities.invokeLater(() -> {
             Client client = new Client();
             client.setVisible(true);
-            client.connectToServer("127.0.0.1", 12345); // Replace with your server IP and port
+            client.connectToServer("127.0.0.1", 12345); 
         });
     }
 }
